@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 VFO CAT Client</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .control-group h3 {
+            margin-top: 0;
+            color: #2d3748;
+            border-bottom: 2px solid #4299e1;
+            padding-bottom: 10px;
+        }
+
+        .frequency-display {
+            font-size: 3em;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            text-align: center;
+            background: #1a202c;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 3px solid #2d3748;
+        }
+
+        button {
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.connect {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            font-size: 16px;
+            padding: 15px 30px;
+        }
+
+        button.disconnect {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+        }
+
+        button.tx-active {
+            background: linear-gradient(135deg, #ed8936, #dd6b20);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .freq-controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .freq-input {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="number"] {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        select {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 2px solid #48bb78;
+        }
+
+        .status.disconnected {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 2px solid #f56565;
+        }
+
+        .log {
+            background: #1a202c;
+            color: #a0aec0;
+            padding: 15px;
+            border-radius: 8px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 20px;
+            border: 2px solid #2d3748;
+        }
+
+        .preset-bands {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .preset-bands button {
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .band-active {
+            background: linear-gradient(135deg, #ed8936, #dd6b20) !important;
+        }
+
+        @media (max-width: 768px) {
+            .control-panel {
+                grid-template-columns: 1fr;
+            }
+            
+            .freq-controls {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .frequency-display {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ ESP32 VFO CAT Client</h1>
+        
+        <div class="control-group">
+            <h3>📡 Conexión Serial</h3>
+            <button id="connectBtn" class="connect">Conectar Puerto Serie</button>
+            <button id="disconnectBtn" class="disconnect" style="display: none;">Desconectar</button>
+            <div id="status" class="status disconnected">Desconectado</div>
+        </div>
+
+        <div class="control-panel">
+            <div class="control-group">
+                <h3>📻 Control de Frecuencia</h3>
+                <div class="frequency-display" id="freqDisplay">14.074.000</div>
+                
+                <div class="freq-input">
+                    <input type="number" id="freqInput" placeholder="Frecuencia en Hz" min="10000" max="225000000" step="1000">
+                    <button onclick="setFrequency()">Establecer</button>
+                </div>
+
+                <div class="freq-controls">
+                    <button onclick="stepFreq(1000000)">+1 MHz</button>
+                    <button onclick="stepFreq(100000)">+100 kHz</button>
+                    <button onclick="stepFreq(10000)">+10 kHz</button>
+                    <button onclick="stepFreq(1000)">+1 kHz</button>
+                    <button onclick="stepFreq(-1000000)">-1 MHz</button>
+                    <button onclick="stepFreq(-100000)">-100 kHz</button>
+                    <button onclick="stepFreq(-10000)">-10 kHz</button>
+                    <button onclick="stepFreq(-1000)">-1 kHz</button>
+                </div>
+
+                <div class="preset-bands">
+                    <button onclick="setPresetFreq(14074000, '20m')">20m</button>
+                    <button onclick="setPresetFreq(7074000, '40m')">40m</button>
+                    <button onclick="setPresetFreq(3573000, '80m')">80m</button>
+                    <button onclick="setPresetFreq(1840000, '160m')">160m</button>
+                    <button onclick="setPresetFreq(21074000, '15m')">15m</button>
+                    <button onclick="setPresetFreq(28074000, '10m')">10m</button>
+                    <button onclick="setPresetFreq(50313000, '6m')">6m</button>
+                    <button onclick="setPresetFreq(144174000, '2m')">2m</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>⚙️ Control del Transceptor</h3>
+                
+                <div style="margin: 15px 0;">
+                    <label><strong>Modo:</strong></label>
+                    <select id="modeSelect" onchange="setMode()">
+                        <option value="1">LSB</option>
+                        <option value="2">USB</option>
+                        <option value="3" selected>CW</option>
+                        <option value="4">FM</option>
+                        <option value="5">AM</option>
+                        <option value="6">FSK</option>
+                        <option value="7">CW-R</option>
+                        <option value="9">FSK-R</option>
+                    </select>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <button id="txBtn" onclick="toggleTX()">📡 TX</button>
+                    <button id="rxBtn" onclick="setRX()" class="band-active">📶 RX</button>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <button onclick="getStatus()">📊 Estado</button>
+                    <button onclick="getID()">🆔 ID Radio</button>
+                    <button id="autoInfoBtn" onclick="toggleAutoInfo()">🔄 Auto-Sync</button>
+                    <button onclick="clearLog()">🗑️ Limpiar Log</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>📋 Log de Comandos CAT</h3>
+            <div id="log" class="log">Esperando conexión...\n</div>
+        </div>
+    </div>
+
+    <script>
+        let port;
+        let reader;
+        let writer;
+        let isConnected = false;
+        let currentFreq = 14074000;
+        let isTX = false;
+        let autoInfoEnabled = false;
+
+        // Verificar soporte Web Serial API
+        if (!navigator.serial) {
+            alert('Web Serial API no soportada. Usa Chrome 89+ con flag habilitado.');
+        }
+
+        async function connect() {
+            try {
+                // Solicitar puerto serial
+                port = await navigator.serial.requestPort();
+                
+                // Abrir puerto con configuración típica de Bluetooth Serial
+                await port.open({ 
+                    baudRate: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none',
+                    flowControl: 'none'
+                });
+
+                // Configurar reader y writer
+                const textDecoder = new TextDecoderStream();
+                const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+                reader = textDecoder.readable.getReader();
+
+                const textEncoder = new TextEncoderStream();
+                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+                writer = textEncoder.writable.getWriter();
+
+                isConnected = true;
+                updateUI();
+                logMessage('✅ Conectado al ESP32 VFO');
+
+                // Inicializar - obtener estado actual
+                await sendCAT('FA');
+                await sendCAT('MD');
+                await sendCAT('TQ');
+                await sendCAT('AI'); // Verificar estado de auto-info
+
+                // Leer respuestas en segundo plano
+                readLoop();
+
+            } catch (error) {
+                logMessage('❌ Error de conexión: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        async function disconnect() {
+            if (reader) {
+                await reader.cancel();
+                reader = null;
+            }
+            if (writer) {
+                await writer.close();
+                writer = null;
+            }
+            if (port) {
+                await port.close();
+                port = null;
+            }
+            isConnected = false;
+            updateUI();
+            logMessage('❌ Desconectado');
+        }
+
+        async function readLoop() {
+            try {
+                while (isConnected && reader) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    // Procesar respuesta CAT
+                    processCAT(value.trim());
+                }
+            } catch (error) {
+                if (isConnected) {
+                    logMessage('❌ Error de lectura: ' + error.message);
+                }
+            }
+        }
+
+        async function sendCAT(command) {
+            if (!isConnected || !writer) {
+                logMessage('❌ No conectado');
+                return;
+            }
+
+            try {
+                const fullCommand = command + ';';
+                await writer.write(fullCommand);
+                logMessage('📤 TX: ' + fullCommand);
+            } catch (error) {
+                logMessage('❌ Error enviando: ' + error.message);
+            }
+        }
+
+        function processCAT(response) {
+            if (!response) return;
+
+            logMessage('📥 RX: ' + response);
+
+            // Procesar diferentes tipos de respuesta
+            if (response.startsWith('FA')) {
+                // Respuesta de frecuencia
+                const freqStr = response.substring(2, 13);
+                currentFreq = parseInt(freqStr);
+                updateFrequencyDisplay();
+            }
+            else if (response.startsWith('MD')) {
+                // Respuesta de modo
+                const mode = response.substring(2, 3);
+                document.getElementById('modeSelect').value = mode;
+            }
+            else if (response.startsWith('TQ')) {
+                // Estado TX/RX
+                const txState = response.substring(2, 3) === '1';
+                isTX = txState;
+                updateTXButtons();
+            }
+            else if (response.startsWith('ID')) {
+                // ID del radio
+                logMessage('🆔 Radio ID: ' + response.substring(2));
+            }
+            else if (response.startsWith('AI')) {
+                // Auto Information status
+                const aiState = response.substring(2, 3) === '1';
+                autoInfoEnabled = aiState;
+                updateAutoInfoButton();
+                logMessage('🔄 Auto-Sync: ' + (aiState ? 'ON' : 'OFF'));
+            }
+        }
+
+        function updateFrequencyDisplay() {
+            const freq = currentFreq;
+            const mhz = Math.floor(freq / 1000000);
+            const khz = Math.floor((freq % 1000000) / 1000);
+            const hz = freq % 1000;
+            
+            let display;
+            if (mhz > 0) {
+                display = `${mhz}.${khz.toString().padStart(3, '0')}.${hz.toString().padStart(3, '0')}`;
+            } else {
+                display = `${khz}.${hz.toString().padStart(3, '0')}`;
+            }
+            
+            document.getElementById('freqDisplay').textContent = display;
+            document.getElementById('freqInput').value = freq;
+        }
+
+        function updateTXButtons() {
+            const txBtn = document.getElementById('txBtn');
+            const rxBtn = document.getElementById('rxBtn');
+            
+            if (isTX) {
+                txBtn.className = 'tx-active';
+                rxBtn.className = '';
+            } else {
+                txBtn.className = '';
+                rxBtn.className = 'band-active';
+            }
+        }
+
+        function updateUI() {
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const status = document.getElementById('status');
+
+            if (isConnected) {
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-block';
+                status.textContent = '✅ Conectado';
+                status.className = 'status connected';
+            } else {
+                connectBtn.style.display = 'inline-block';
+                disconnectBtn.style.display = 'none';
+                status.textContent = '❌ Desconectado';
+                status.className = 'status disconnected';
+            }
+        }
+
+        function logMessage(message) {
+            const log = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Funciones de control
+        async function setFrequency() {
+            const freq = parseInt(document.getElementById('freqInput').value);
+            if (freq >= 10000 && freq <= 225000000) {
+                const freqStr = freq.toString().padStart(11, '0');
+                await sendCAT('FA' + freqStr);
+                await sendCAT('FA'); // Solicitar confirmación
+            }
+        }
+
+        async function stepFreq(step) {
+            const newFreq = Math.max(10000, Math.min(225000000, currentFreq + step));
+            const freqStr = newFreq.toString().padStart(11, '0');
+            await sendCAT('FA' + freqStr);
+            await sendCAT('FA'); // Solicitar confirmación
+        }
+
+        async function setPresetFreq(freq, band) {
+            // Remover clase activa de todos los botones
+            document.querySelectorAll('.preset-bands button').forEach(btn => {
+                btn.classList.remove('band-active');
+            });
+            
+            // Agregar clase activa al botón presionado
+            event.target.classList.add('band-active');
+            
+            const freqStr = freq.toString().padStart(11, '0');
+            await sendCAT('FA' + freqStr);
+            await sendCAT('FA');
+            logMessage('📻 Banda: ' + band + ' (' + (freq/1000000).toFixed(3) + ' MHz)');
+        }
+
+        async function setMode() {
+            const mode = document.getElementById('modeSelect').value;
+            await sendCAT('MD' + mode);
+        }
+
+        async function toggleTX() {
+            if (isTX) {
+                await sendCAT('RX');
+            } else {
+                await sendCAT('TX');
+            }
+            await sendCAT('TQ'); // Solicitar estado
+        }
+
+        async function setRX() {
+            await sendCAT('RX');
+            await sendCAT('TQ'); // Solicitar estado
+        }
+
+        async function getStatus() {
+            await sendCAT('IF'); // Estado completo
+            await sendCAT('FA'); // Frecuencia
+            await sendCAT('MD'); // Modo
+            await sendCAT('TQ'); // TX status
+        }
+
+        async function getID() {
+            await sendCAT('ID');
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        async function toggleAutoInfo() {
+            const newState = !autoInfoEnabled;
+            await sendCAT('AI' + (newState ? '1' : '0'));
+        }
+
+        function updateAutoInfoButton() {
+            const btn = document.getElementById('autoInfoBtn');
+            if (autoInfoEnabled) {
+                btn.className = 'band-active';
+                btn.textContent = '🔄 Auto-Sync ON';
+            } else {
+                btn.className = '';
+                btn.textContent = '🔄 Auto-Sync OFF';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('connectBtn').addEventListener('click', connect);
+        document.getElementById('disconnectBtn').addEventListener('click', disconnect);
+
+        // Permitir Enter en el input de frecuencia
+        document.getElementById('freqInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                setFrequency();
+            }
+        });
+
+        // Inicializar display
+        updateFrequencyDisplay();
+        updateUI();
+        updateAutoInfoButton();
+        logMessage('🚀 Cliente CAT listo. Haz clic en "Conectar Puerto Serie"');
+    </script>
+</body>
+</html>
