@@ -493,49 +493,87 @@
         }
 
         function ansiToHtml(text) {
-            // Mapa de códigos ANSI a clases CSS
-            const ansiMap = {
-                '0': 'reset',
-                '1': 'bold',
-                '30': 'black',
-                '31': 'red',
-                '32': 'green',
-                '33': 'yellow',
-                '34': 'blue',
-                '35': 'magenta',
-                '36': 'cyan',
-                '37': 'white',
-                '90': 'bright-black',
-                '91': 'bright-red',
-                '92': 'bright-green',
-                '93': 'bright-yellow',
-                '94': 'bright-blue',
-                '95': 'bright-magenta',
-                '96': 'bright-cyan',
-                '97': 'bright-white'
+            // Escapar HTML para evitar inyección
+            text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Mapa de códigos ANSI a colores
+            const colorMap = {
+                '0': { action: 'reset' },
+                '1': { action: 'bold' },
+                '30': { color: '#2d3748' },    // negro
+                '31': { color: '#f56565' },    // rojo
+                '32': { color: '#68d391' },    // verde
+                '33': { color: '#f6e05e' },    // amarillo
+                '34': { color: '#63b3ed' },    // azul
+                '35': { color: '#d53f8c' },    // magenta
+                '36': { color: '#4fd1c7' },    // cyan
+                '37': { color: '#f7fafc' },    // blanco
+                '90': { color: '#4a5568' },    // negro brillante
+                '91': { color: '#fc8181' },    // rojo brillante
+                '92': { color: '#9ae6b4' },    // verde brillante
+                '93': { color: '#faf089' },    // amarillo brillante
+                '94': { color: '#90cdf4' },    // azul brillante
+                '95': { color: '#f687b3' },    // magenta brillante
+                '96': { color: '#81e6d9' },    // cyan brillante
+                '97': { color: '#ffffff' }     // blanco brillante
             };
 
-            // Reemplazar secuencias ANSI con spans HTML
-            return text.replace(/\x1b\[([0-9;]+)m/g, (match, codes) => {
-                const codeList = codes.split(';');
-                let classes = [];
+            let openSpans = 0;
+            
+            // Reemplazar todas las secuencias ANSI - varios patrones posibles
+            text = text.replace(/\x1b\[([0-9;]*)[mK]?/g, (match, codes) => {
+                // Cerrar spans anteriores si es reset
+                if (codes === '0' || codes === '') {
+                    const closeSpans = '</span>'.repeat(openSpans);
+                    openSpans = 0;
+                    return closeSpans;
+                }
+                
+                const codeList = codes.split(';').filter(code => code !== '');
+                let styles = [];
+                let fontWeight = '';
                 
                 for (let code of codeList) {
-                    if (ansiMap[code]) {
-                        classes.push('ansi-' + ansiMap[code]);
+                    const mapping = colorMap[code];
+                    if (mapping) {
+                        if (mapping.action === 'bold') {
+                            fontWeight = 'font-weight: bold;';
+                        } else if (mapping.color) {
+                            styles.push(`color: ${mapping.color};`);
+                        }
                     }
                 }
                 
-                if (classes.length > 0) {
-                    return `<span class="${classes.join(' ')}">`;
+                if (styles.length > 0 || fontWeight) {
+                    openSpans++;
+                    const styleAttr = styles.concat(fontWeight).join(' ');
+                    return `<span style="${styleAttr}">`;
                 }
-                return '</span>';
+                
+                return '';
             });
+            
+            return text;
+        }
+
+        function debugMessage(message) {
+            // Función para debugging - mostrar códigos de caracteres
+            const debugInfo = message.split('').map(char => {
+                const code = char.charCodeAt(0);
+                if (code < 32 || code > 126) {
+                    return `\\x${code.toString(16).padStart(2, '0')}`;
+                }
+                return char;
+            }).join('');
+            console.log('Debug message:', debugInfo);
         }
 
         function logMessage(message) {
             const log = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
+            
+            // Debug para ver caracteres especiales
+            debugMessage(message);
             
             // Convertir secuencias ANSI a HTML
             const htmlMessage = ansiToHtml(message);
