@@ -171,6 +171,26 @@
             white-space: pre-wrap;
         }
 
+        /* Estilos ANSI para colores en el log */
+        .ansi-reset { color: #a0aec0; font-weight: normal; }
+        .ansi-bold { font-weight: bold; }
+        .ansi-black { color: #2d3748; }
+        .ansi-red { color: #f56565; }
+        .ansi-green { color: #68d391; }
+        .ansi-yellow { color: #f6e05e; }
+        .ansi-blue { color: #63b3ed; }
+        .ansi-magenta { color: #d53f8c; }
+        .ansi-cyan { color: #4fd1c7; }
+        .ansi-white { color: #f7fafc; }
+        .ansi-bright-black { color: #4a5568; }
+        .ansi-bright-red { color: #fc8181; }
+        .ansi-bright-green { color: #9ae6b4; }
+        .ansi-bright-yellow { color: #faf089; }
+        .ansi-bright-blue { color: #90cdf4; }
+        .ansi-bright-magenta { color: #f687b3; }
+        .ansi-bright-cyan { color: #81e6d9; }
+        .ansi-bright-white { color: #ffffff; }
+
         .preset-bands {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
@@ -472,10 +492,56 @@
             }
         }
 
+        function ansiToHtml(text) {
+            // Mapa de códigos ANSI a clases CSS
+            const ansiMap = {
+                '0': 'reset',
+                '1': 'bold',
+                '30': 'black',
+                '31': 'red',
+                '32': 'green',
+                '33': 'yellow',
+                '34': 'blue',
+                '35': 'magenta',
+                '36': 'cyan',
+                '37': 'white',
+                '90': 'bright-black',
+                '91': 'bright-red',
+                '92': 'bright-green',
+                '93': 'bright-yellow',
+                '94': 'bright-blue',
+                '95': 'bright-magenta',
+                '96': 'bright-cyan',
+                '97': 'bright-white'
+            };
+
+            // Reemplazar secuencias ANSI con spans HTML
+            return text.replace(/\x1b\[([0-9;]+)m/g, (match, codes) => {
+                const codeList = codes.split(';');
+                let classes = [];
+                
+                for (let code of codeList) {
+                    if (ansiMap[code]) {
+                        classes.push('ansi-' + ansiMap[code]);
+                    }
+                }
+                
+                if (classes.length > 0) {
+                    return `<span class="${classes.join(' ')}">`;
+                }
+                return '</span>';
+            });
+        }
+
         function logMessage(message) {
             const log = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
-            log.textContent += `[${timestamp}] ${message}\n`;
+            
+            // Convertir secuencias ANSI a HTML
+            const htmlMessage = ansiToHtml(message);
+            
+            // Usar innerHTML en lugar de textContent para permitir HTML
+            log.innerHTML += `[${timestamp}] ${htmlMessage}\n`;
             log.scrollTop = log.scrollHeight;
         }
 
@@ -542,7 +608,7 @@
         }
 
         function clearLog() {
-            document.getElementById('log').textContent = '';
+            document.getElementById('log').innerHTML = '';
         }
 
         async function toggleAutoInfo() {
