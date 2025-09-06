@@ -10,7 +10,9 @@
 #include <si5351.h>               //Etherkit  https://github.com/etherkit/Si5351Arduino
 #include <Adafruit_GFX.h>         //Adafruit  GFX https://github.com/adafruit/Adafruit-GFX-Library
 #include <Adafruit_SSD1306.h>     //Adafruit SSD1306 https://github.com/adafruit/Adafruit_SSD1306
-#include "BluetoothSerial.h"      //ESP32 Bluetooth Serial
+#ifndef ARDUINO_ESP32S3_DEV
+#include "BluetoothSerial.h"      //ESP32 Bluetooth Serial (not available on ESP32-S3)
+#endif
 
 // Project modules
 #include "cat_control.h"
@@ -19,15 +21,29 @@
 
 //User  preferences
 //------------------------------------------------------------------------------------------------------------
-#define tunestep   36        //The  pin used by tune step push button (GPIO36 - ADC1_CH0).
-#define band       39        //The pin used  by band selector push button (GPIO39 - ADC1_CH3).
-#define rx_tx      34        //The pin used by  RX / TX selector switch, RX = switch open, TX = switch closed to GND. When in TX,  the IF value is not considered (GPIO34 - ADC1_CH6).
+#ifdef ARDUINO_ESP32S3_DEV
+  #define tunestep   4         //The pin used by tune step push button (GPIO4 - ADC1_CH3).
+  #define band       5         //The pin used by band selector push button (GPIO5 - ADC1_CH4).
+  #define rx_tx      6         //The pin used by RX / TX selector switch, RX = switch open, TX = switch closed to GND. When in TX, the IF value is not considered (GPIO6 - ADC1_CH5).
+  #define ENCODER_PIN_A  7     //Rotary encoder pin A (GPIO7)
+  #define ENCODER_PIN_B  15    //Rotary encoder pin B (GPIO15)
+  #define S_METER_ADC    8     //S-meter ADC input (GPIO8 - ADC1_CH7)
+#else
+  #define tunestep   36        //The pin used by tune step push button (GPIO36 - ADC1_CH0).
+  #define band       39        //The pin used by band selector push button (GPIO39 - ADC1_CH3).
+  #define rx_tx      34        //The pin used by RX / TX selector switch, RX = switch open, TX = switch closed to GND. When in TX, the IF value is not considered (GPIO34 - ADC1_CH6).
+  #define ENCODER_PIN_A  2     //Rotary encoder pin A (GPIO2)
+  #define ENCODER_PIN_B  3     //Rotary encoder pin B (GPIO3)
+  #define S_METER_ADC    35    //S-meter ADC input (GPIO35)
+#endif
 //------------------------------------------------------------------------------------------------------------
 
-RotaryEncoder encoder(2, 3, RotaryEncoder::LatchMode::TWO03);
+RotaryEncoder encoder(ENCODER_PIN_A, ENCODER_PIN_B, RotaryEncoder::LatchMode::TWO03);
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire);
 Si5351  si5351(0x60);
+#ifndef ARDUINO_ESP32S3_DEV
 BluetoothSerial SerialBT;
+#endif
 
 unsigned long freq, freqold, fstep;
 long  interfreq = IF_FREQUENCY, interfreqold = 0;
@@ -46,19 +62,33 @@ void IRAM_ATTR checkPosition() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP32 VFO with CAT Control");
+  delay(2000);  // Give time for serial to initialize
   
-  // Initialize Bluetooth
+  Serial.println();
+  Serial.println("=== ESP32 VFO with CAT Control ===");
+#ifdef ARDUINO_ESP32S3_DEV
+  Serial.println("Running on ESP32-S3");
+#else
+  Serial.println("Running on ESP32");
+#endif
+  
+#ifndef ARDUINO_ESP32S3_DEV
+  // Initialize Bluetooth (not available on ESP32-S3)
   setupBluetooth();
+#endif
   
-  Wire.begin();
+#ifdef ARDUINO_ESP32S3_DEV
+  Wire.begin(11, 12);  // SDA=GPIO11, SCL=GPIO12 for ESP32-S3
+#else
+  Wire.begin();        // Default pins for ESP32 (SDA=GPIO21, SCL=GPIO22)
+#endif
   display.begin(SSD1306_SWITCHCAPVCC,  0x3C);
   display.clearDisplay();
   display.setTextColor(WHITE);
   display.display();
 
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
+  pinMode(ENCODER_PIN_A, INPUT_PULLUP);
+  pinMode(ENCODER_PIN_B, INPUT_PULLUP);
   pinMode(tunestep,  INPUT_PULLUP);
   pinMode(band, INPUT_PULLUP);
   pinMode(rx_tx, INPUT_PULLUP);
@@ -73,8 +103,8 @@ void setup() {
   si5351.output_enable(SI5351_CLK2,  0);
 
   // Setup encoder interrupts
-  attachInterrupt(digitalPinToInterrupt(2), checkPosition, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(3), checkPosition, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), checkPosition, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), checkPosition, CHANGE);
 
   count = BAND_INIT;
   bandpresets();
@@ -82,7 +112,11 @@ void setup() {
   setstep();
   
   Serial.println("System ready!");
+#ifndef ARDUINO_ESP32S3_DEV
   Serial.println("- Bluetooth CAT control available as: " CAT_DEVICE_NAME);
+#else
+  Serial.println("- CAT control available via USB Serial");
+#endif
   Serial.printf("Base frequency: %.3f MHz\n", freq / 1000000.0);
 }
 

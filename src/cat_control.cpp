@@ -1,23 +1,32 @@
 #include "cat_control.h"
 #include "frequency_control.h"
 
+#ifndef ARDUINO_ESP32S3_DEV
+extern BluetoothSerial SerialBT;
+#define CAT_SERIAL SerialBT
+#else
+#define CAT_SERIAL Serial
+#endif
+
 String cat_command = "";
 bool cat_tx_state = false;
 String current_mode = "CW";
 bool auto_info = false;
 
 void setupBluetooth() {
+#ifndef ARDUINO_ESP32S3_DEV
   if (!SerialBT.begin(CAT_DEVICE_NAME)) {
     Serial.println("An error occurred initializing Bluetooth");
   } else {
     Serial.println("Bluetooth CAT interface started");
     Serial.println("Device name: " CAT_DEVICE_NAME);
   }
+#endif
 }
 
 void processCATCommand() {
-  while (SerialBT.available()) {
-    char c = SerialBT.read();
+  while (CAT_SERIAL.available()) {
+    char c = CAT_SERIAL.read();
     
     if (c == ';') {
       cat_command.trim();
@@ -79,9 +88,14 @@ void processCATCommand() {
 }
 
 void sendCATResponse(String response) {
-  SerialBT.print(response);
+  CAT_SERIAL.print(response);
+#ifdef ARDUINO_ESP32S3_DEV
+  // For ESP32-S3, CAT_SERIAL is Serial, so we can't debug to Serial without conflict
+  // Debug info will be in the CAT response itself
+#else
   Serial.print("CAT TX: ");
   Serial.println(response);
+#endif
 }
 
 String formatFrequency(unsigned long frequency) {

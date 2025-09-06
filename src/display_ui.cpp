@@ -1,7 +1,12 @@
 #include "display_ui.h"
 
 #define S_GAIN 303
-#define adc 35
+
+#ifdef ARDUINO_ESP32S3_DEV
+  #define adc 8      // S-meter ADC input for ESP32-S3 (GPIO8 - ADC1_CH7)
+#else
+  #define adc 35     // S-meter ADC input for ESP32 (GPIO35)
+#endif
 
 void displayfreq() {
   unsigned int m = freq / 1000000;
